@@ -1,0 +1,31 @@
+[package]
+name = "my_ext_proc_server"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# Tonic for gRPC server/client
+tonic = "0.13"
+tonic-reflection = "0.13"
+# Prost for Protobuf message handling (used by tonic)
+prost = "0.13"
+# Tokio runtime
+tokio = { version = "1.44", features = ["macros", "rt-multi-thread"] }
+# Tracing for logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# Futures stream handling (often used with tonic streams)
+futures = "0.3"
+# Needed for ReceiverStream wrapper used with tonic streams
+tokio-stream = "0.1" # Usually versioned independently but part of Tokio 1 ecosystem
+# Needed for well-known protobuf types like Struct, Duration used by prost/tonic
+prost-types = "0.13" # Match the prost version
+
+# Required for building the protobuf definitions
+[build-dependencies]
+tonic-build = "0.13" # Use the same version as tonic
+# build.rs uses std::fs, std::io, std::path
+walkdir = "2"
+regex   = "1"

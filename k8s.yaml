@@ -1,0 +1,69 @@
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyExtensionPolicy
+metadata:
+  name: apps-services-default-dummy-extproc
+  namespace: ingress
+spec:
+  extProc:
+  - backendRefs:
+    - group: ""
+      kind: Service
+      name: ext-proc-headless-svc
+      namespace: ingress
+      port: 50051
+    processingMode:
+      request:
+        attributes:
+        - source.address
+        - request.host
+      response:
+        body: Streamed
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: apps-services-default
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ext-proc-headless-svc
+  namespace: ingress
+spec:
+  clusterIP: None
+  ports:
+  - name: grpc
+    port: 50051
+    targetPort: 50051
+  selector:
+    # Use the *exact same labels* as your Envoy pod
+    app.kubernetes.io/component: proxy
+    app.kubernetes.io/managed-by: envoy-gateway
+    app.kubernetes.io/name: envoy
+    gateway.envoyproxy.io/owning-gatewayclass: envoy
+####
+# External processor container is injected into Envoy proxy deployment itself via EnvoyProxy resource
+# in particular, we add this in spec.provider.kubernetes.envoyDeployment:
+#
+#        patch:
+#          type: StrategicMerge
+#          value:
+#            spec:
+#              template:
+#                spec:
+#                  containers:
+#                  - image: igormendix/rust-extproc-server
+#                    imagePullPolicy: Always
+#                    name: dummy-rust-processor
+#                    env:
+#                    - name: RUST_LOG
+#                      value: warning
+#                    ports:
+#                    - containerPort: 50051
+#                    resources:
+#                      limits:
+#                        cpu: 1
+#                        memory: 20Mi
+#                      requests:
+#                        cpu: 1
+#                        memory: 20Mi
