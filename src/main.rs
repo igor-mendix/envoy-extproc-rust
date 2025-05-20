@@ -342,7 +342,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let grpc_server = Server::builder()
         .trace_fn(|_req| tracing::info_span!("grpc_request"))
-        .max_concurrent_streams(Some(1024))  // default is 200
+        .max_concurrent_streams(Some(10000))  // default is 200
         .add_service(ExternalProcessorServer::new(ext_proc_svc))
         .add_service(reflection_service)
         .serve(grpc_addr);
