@@ -86,7 +86,7 @@ use envoy::config::core::v3::{HeaderValue, HeaderValueOption};
 use envoy::r#type::v3::HttpStatus;
 use envoy::r#type::v3::StatusCode as EnvoyStatusCode;
 
-use futures::Stream;
+use futures::{Stream, future};
 use std::pin::Pin;
 use tokio::sync::mpsc;
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
@@ -97,7 +97,6 @@ use tracing::{error, info, warn, instrument, Level, debug};
 use tracing_subscriber::{
     fmt,
     EnvFilter,
-    // Layer and reload are no longer needed for this simpler setup
     prelude::*, // For .with() and .init()
 };
 
@@ -194,16 +193,16 @@ impl ExternalProcessor for MyExtProcessor {
                             Some(processing_request::Request::RequestTrailers(_trailers_req)) => {
                                 debug!(trailers = ?_trailers_req.trailers.as_ref().map(|h| &h.headers), "Processing RequestTrailers");
                                 let trailer_mutations = HeaderMutation {
-                                     set_headers: vec![HeaderValueOption {
-                                         header: Some(HeaderValue {
-                                             key: "x-rust-request-trailer".to_string(),
-                                             value: "added-by-processor".to_string(),
-                                             raw_value: "added-by-processor".to_string().into_bytes(),
-                                         }),
-                                         append: None,
-                                         append_action: envoy::config::core::v3::header_value_option::HeaderAppendAction::AppendIfExistsOrAdd.into(),
-                                         keep_empty_value: false,
-                                     }],
+                                    set_headers: vec![HeaderValueOption {
+                                        header: Some(HeaderValue {
+                                            key: "x-rust-request-trailer".to_string(),
+                                            value: "added-by-processor".to_string(),
+                                            raw_value: "added-by-processor".to_string().into_bytes(),
+                                        }),
+                                        append: None,
+                                        append_action: envoy::config::core::v3::header_value_option::HeaderAppendAction::AppendIfExistsOrAdd.into(),
+                                        keep_empty_value: false,
+                                    }],
                                     ..Default::default()
                                 };
                                 ProcessingResponse {
@@ -260,16 +259,16 @@ impl ExternalProcessor for MyExtProcessor {
                             Some(processing_request::Request::ResponseTrailers(_trailers_req)) => {
                                 debug!(trailers = ?_trailers_req.trailers.as_ref().map(|h| &h.headers), "Processing ResponseTrailers");
                                 let trailer_mutations = HeaderMutation {
-                                     set_headers: vec![HeaderValueOption {
-                                         header: Some(HeaderValue {
-                                             key: "x-rust-response-trailer".to_string(),
-                                             value: "added-by-processor".to_string(),
-                                             raw_value: "added-by-processor".to_string().into_bytes(),
-                                         }),
-                                         append: None,
-                                         append_action: envoy::config::core::v3::header_value_option::HeaderAppendAction::AppendIfExistsOrAdd.into(),
-                                         keep_empty_value: false,
-                                     }],
+                                    set_headers: vec![HeaderValueOption {
+                                        header: Some(HeaderValue {
+                                            key: "x-rust-response-trailer".to_string(),
+                                            value: "added-by-processor".to_string(),
+                                            raw_value: "added-by-processor".to_string().into_bytes(),
+                                        }),
+                                        append: None,
+                                        append_action: envoy::config::core::v3::header_value_option::HeaderAppendAction::AppendIfExistsOrAdd.into(),
+                                        keep_empty_value: false,
+                                    }],
                                     ..Default::default()
                                 };
                                 ProcessingResponse {
@@ -284,7 +283,7 @@ impl ExternalProcessor for MyExtProcessor {
                             None => {
                                 warn!("Received ProcessingRequest with no specific request type (request field was None).");
                                 ProcessingResponse {
-                                     response: Some(processing_response::Response::ImmediateResponse(
+                                    response: Some(processing_response::Response::ImmediateResponse(
                                         envoy::service::ext_proc::v3::ImmediateResponse {
                                             status: Some(HttpStatus { code: EnvoyStatusCode::InternalServerError as i32 }),
                                             headers: None,
@@ -320,6 +319,31 @@ impl ExternalProcessor for MyExtProcessor {
     }
 }
 
+// Function to handle shutdown signal
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("Failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("Failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = future::pending::<()>(); // On non-unix, terminate is a no-op
+
+    tokio::select! {
+        _ = ctrl_c => {info!("Received SIGINT (Ctrl+C). Shutting down...");},
+        _ = terminate => {info!("Received SIGTERM. Shutting down...");},
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing subscriber based on RUST_LOG env var or a default.
@@ -340,17 +364,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .register_encoded_file_descriptor_set(envoy::service::ext_proc::v3::FILE_DESCRIPTOR_SET)
         .build_v1()?; 
 
-    let grpc_server = Server::builder()
+    let server_builder = Server::builder()
         .trace_fn(|_req| tracing::info_span!("grpc_request"))
         .max_concurrent_streams(Some(10000))  // default is 200
         .add_service(ExternalProcessorServer::new(ext_proc_svc))
-        .add_service(reflection_service)
-        .serve(grpc_addr);
+        .add_service(reflection_service);
     
-    // Only run the gRPC server
-    grpc_server.await?;
+    info!("Starting gRPC server, awaiting requests or shutdown signal.");
 
-    info!("ExternalProcessorServer shut down."); // This line might not be reached if server runs indefinitely
+    // Serve with graceful shutdown
+    server_builder
+        .serve_with_shutdown(grpc_addr, shutdown_signal())
+        .await?;
+
+    info!("ExternalProcessorServer has shut down gracefully.");
     Ok(())
 }
 

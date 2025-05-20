@@ -1,6 +1,6 @@
 [package]
 name = "my_ext_proc_server"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -12,7 +12,7 @@ tonic-reflection = "0.13"
 # Prost for Protobuf message handling (used by tonic)
 prost = "0.13"
 # Tokio runtime
-tokio = { version = "1.44", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.44", features = ["macros", "rt-multi-thread", "signal"] }
 # Tracing for logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
