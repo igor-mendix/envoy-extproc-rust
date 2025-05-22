@@ -17,8 +17,9 @@ spec:
         attributes:
         - source.address
         - request.host
-      response:
-        body: Streamed
+      # Only processing requests, but responses are also possible
+      # response:
+      #   body: Streamed
   targetRef:
     group: gateway.networking.k8s.io
     kind: Gateway
