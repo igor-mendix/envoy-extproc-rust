@@ -5,17 +5,17 @@ This is almost entirely AI-generated and was only used for testing. No guarantee
 
 ## Purpose
 
-This is a simple Envoy External Processing (ext_proc) gRPC server written in Rust. It demonstrates how to interact with Envoy to modify HTTP traffic.
+This is a simple Envoy External Processing gRPC server written in Rust. It demonstrates how to interact with Envoy to modify HTTP traffic.
 
 ## Build Process
 
-During the build process (orchestrated by `make`), `build.rs` uses Bazel to fetch and manage the necessary Protocol Buffer (proto) files for Envoy's APIs. These protos are then compiled into Rust code.
+Makefile has a target that fetches necessary Protocol Buffer (proto) files for Envoy's API (via Bazel). Then, during the build process, `build.rs` uses Bazel cache to add these proto files as Rust code.
 
 ### Build
 
 #### Prerequisites
 * `make`
-* For local build: Rust and Cargo and Bazel
+* For local build: Rust, Cargo and Bazel
 * For Docker-based build: Docker
 
 
@@ -43,7 +43,7 @@ make build-push
 
 Customize image name (which is `igormendix/rust-extproc-server` by default):
 ```bash
-IMAGE_NAME=someone/somename make build-push
+IMAGE_NAME=someone/some-name make build-push
 ```
 (or set `IMAGE_NAME` env var).
 
@@ -53,7 +53,7 @@ IMAGE_NAME=someone/somename make build-push
 The gRPC server implemented in `src/main.rs` acts as a dummy processor. Its primary function is to:
 
 * Listen for incoming gRPC requests from Envoy on port `50051`
-* For each HTTP request phase (request headers, response headers, request trailers, response trailers), it **adds a custom HTTP header**. For example, it adds `x-processed-by-rust-request: my-ext-processor` to request headers and `x-processed-by-rust-response: my-ext-processor` to response headers
+* For each HTTP request phase (request headers, response headers, request trailers, response trailers), it adds a custom HTTP header. For example, it adds `x-processed-by-rust-request: my-ext-processor` to request headers and `x-processed-by-rust-response: my-ext-processor` to response headers
 * It allows the request and response bodies to pass through without modification
 * Supports gRPC reflection for easier inspection
 
